@@ -6,6 +6,44 @@
 
 A **microcontroller-optimized** time-series database library designed for SD Card storage on embedded devices. Built with modern C++17 for zero-cost abstractions while maintaining the performance of pure C.
 
+## 📚 Documentation Layers
+
+This library provides **two API layers** to suit different needs:
+
+### 1. Easy API (Recommended for Most Users) ⭐
+High-level abstraction with intuitive names, fluent configuration, and flexible usage patterns. Perfect for rapid development.
+
+```cpp
+#include "tsdb_easy.hpp"
+using namespace micro_tsdb::easy;
+
+Database db;
+db.open(DBConfig::create().path("/sdcard"));
+
+// Write data
+db.write_value(42);                          // Auto timestamp
+db.write({{t1, v1}, {t2, v2}});             // Initializer list
+db.write(DataPoint::now(temperature));      // Named constructor
+
+// Query data
+auto results = db.query(TimeRange::last(3600000));
+printf("Average: %.2f\n", results.average());
+```
+
+### 2. Core API (Advanced Users)
+Low-level control with direct access to all features. Use when you need maximum performance or customization.
+
+```cpp
+#include "micro_tsdb.hpp"
+using namespace micro_tsdb;
+
+MicroTSDB<4> db;
+db.init(config, hal);
+db.write(record);
+```
+
+---
+
 ## Key Features
 
 ### 🚀 Performance Optimized
@@ -31,14 +69,62 @@ A **microcontroller-optimized** time-series database library designed for SD Car
 
 ### Installation
 
-Copy the `include/` directory to your project:
+Copy the files to your project:
 
 ```bash
-cp -r include/micro_tsdb.h include/micro_tsdb.hpp /your/project/include/
+# For Easy API (recommended)
+cp include/tsdb_easy.hpp include/micro_tsdb.h include/micro_tsdb.hpp /your/project/include/
 cp src/micro_tsdb.cpp /your/project/src/
+
+# Or just Core API
+cp include/micro_tsdb.h include/micro_tsdb.hpp /your/project/include/
 ```
 
-### Basic Usage
+### Easy API Usage (Recommended) ⭐
+
+```cpp
+#include "tsdb_easy.hpp"
+using namespace micro_tsdb::easy;
+
+// 1. Create database instance
+Database db;
+
+// 2. Configure with fluent interface
+auto config = DBConfig::create()
+    .path("/sdcard/data")
+    .prefix("sensor")
+    .max_file_size_mb(50)
+    .enable_indexing()
+    .build();
+
+// 3. Open database
+if (!db.open(config, hal)) {
+    // Handle error
+}
+
+// 4. Write data (multiple ways!)
+db.write_value(42);                        // Auto timestamp
+db.write(DataPoint{millis(), 25});        // Explicit timestamp
+db.write({{t1, v1}, {t2, v2}});           // Initializer list
+db.write(DataPoint::now(temperature));    // Named constructor
+
+// 5. Query data
+auto results = db.query(TimeRange::last(3600000));  // Last hour
+printf("Records: %zu\n", results.size());
+printf("Average: %.2f\n", results.average());
+printf("Min: %d, Max: %d\n", 
+       results.min_value(), results.max_value());
+
+// 6. Get latest record
+DataPoint latest;
+if (db.latest(latest)) {
+    printf("Latest: %d\n", latest.value);
+}
+
+// 7. Auto-closed on destruction (RAII)
+```
+
+### Core API Usage
 
 ```cpp
 #include "micro_tsdb.hpp"
@@ -89,6 +175,50 @@ db.read_by_time_range(start_time, end_time, results, 100, count);
 // 7. Auto-closed on destruction (RAII) or call explicitly
 db.close();
 ```
+
+## Easy API Reference
+
+The Easy API provides intuitive names and flexible patterns:
+
+### Core Types
+
+| Type | Description | Example |
+|------|-------------|---------|
+| `DataPoint` | Simple data wrapper | `DataPoint{time, value, flags}` |
+| `TimeRange` | Time query range | `TimeRange::last(3600000)` |
+| `QueryResult` | Query results with stats | `results.average()` |
+| `Database<N>` | Main database class | `Database<> db` |
+| `DBConfig` | Fluent config builder | `DBConfig::create().path("/sd")` |
+
+### Database Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `open(config, hal)` | `bool` | Open database |
+| `close()` | `void` | Close database |
+| `write(dp)` | `bool` | Write single point |
+| `write({{t1,v1},...})` | `bool` | Write multiple points |
+| `write_value(v)` | `bool` | Write with auto timestamp |
+| `query(range)` | `QueryResult` | Query by time range |
+| `last(n)` | `QueryResult` | Get last N records |
+| `latest(out)` | `bool` | Get latest record |
+| `count()` | `uint64_t` | Total record count |
+| `flush()` | `bool` | Flush buffer to disk |
+| `stats()` | `Stats` | Get statistics |
+
+### QueryResult Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `size()` | `size_t` | Number of records |
+| `average()` | `double` | Average value |
+| `min_value()` | `int32_t` | Minimum value |
+| `max_value()` | `int32_t` | Maximum value |
+| `first_or_default()` | `DataPoint` | First record |
+| `last_or_default()` | `DataPoint` | Last record |
+| Range-based for | iterator | `for (auto& dp : result)` |
+
+---
 
 ## Configuration Options
 
